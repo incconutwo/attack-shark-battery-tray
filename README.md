@@ -8,6 +8,41 @@ This tool serves as a lightweight alternative to the official, resource-heavy ma
 
 ---
 
+## Supported Devices Status
+
+The application officially recognizes the following models, with a dynamic generic fallback that supports other compatible Beken/Sino Wealth OEM mice:
+
+| Mouse Model | Wireless (2.4G) | Wired / Charging | Status Notes |
+| :--- | :---: | :---: | :--- |
+| **Attack Shark X11** | 🟢 Supported | 🟢 Supported | Verified and fully mapped |
+| **Attack Shark X6** | 🟢 Supported | 🟢 Supported | Verified and fully mapped |
+| **Attack Shark R1** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
+| **Attack Shark X3** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
+| **Other Beken OEM Mice** | 🟡 Auto-Detected | 🟡 Auto-Detected | Works generically via fallback logic |
+
+---
+
+## Contributing & Adding New Models
+
+If your mouse is not fully recognized or is displayed as a generic device, we would love to add official support for it! 
+
+We've made this process incredibly easy by including a standalone **Hardware ID Extractor wizard** (`dump_devices.exe`):
+
+1. Go to the [Releases page](https://github.com/incconutwo/attack-shark-battery-tray/releases) and download **`dump_devices.exe`** (or run `python dump_devices.py`).
+2. Run it and follow the simple 2-step prompt to scan your mouse in **Wireless (2.4G)** and **Wired** modes.
+3. The wizard will automatically generate the clean Python dictionary configuration lines for your device.
+4. Copy the generated block and paste it into a GitHub issue or Reddit reply!
+
+If you want to manually add support yourself, you can simply append your Product ID to the `SUPPORTED_DEVICES` dictionary at the top of `x11_battery_tray.pyw`:
+
+```python
+SUPPORTED_DEVICES = {
+    0xYOUR_PID_HEX: ("Your Mouse Name", "wireless"),
+}
+```
+
+---
+
 ## Features
 
 - **Live Numeric Percentage:** Displays the exact battery level directly on the tray icon as a colored number.
@@ -58,16 +93,4 @@ pip install hidapi pystray pillow
 - **Permissions Issue:**
   The app runs entirely in user-space and does not require admin rights. If the tray icon doesn't update, check if another exclusive tool (like the official software) is currently open and locking the USB receiver port.
 
----
 
-## Contributing/Adding New Models
-If your mouse uses the same OEM framework but reports a different Product ID (PID), you can easily add it to the `SUPPORTED_DEVICES` dictionary at the top of `x11_battery_tray.pyw`:
-
-```python
-SUPPORTED_DEVICES = {
-    # Add your custom mouse details here
-    0xYOUR_PID_HEX: ("Your Mouse Name", "wireless"),
-}
-```
-
-*To find your mouse's PID, open Windows Device Manager, find the mouse properties, and check under **Details > Hardware IDs**.*
