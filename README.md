@@ -16,9 +16,10 @@ The application officially recognizes the following models, with a dynamic gener
 | :--- | :---: | :---: | :--- |
 | **Attack Shark X11** | 🟢 Supported | 🟢 Supported | Verified and fully mapped |
 | **Attack Shark X6** | 🟢 Supported | 🟢 Supported | Verified and fully mapped |
+| **Pulsar Xlite Wireless** | 🟢 Supported | 🟢 Supported | Verified and fully mapped (CompX) |
 | **Attack Shark R1** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
 | **Attack Shark X3** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
-| **Other Beken OEM Mice** | 🟡 Auto-Detected | 🟡 Auto-Detected | Works generically via fallback logic |
+| **Other Beken/CompX Mice** | 🟡 Auto-Detected | 🟡 Auto-Detected | Works generically via fallback logic |
 
 ---
 
