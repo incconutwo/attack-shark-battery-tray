@@ -7,8 +7,8 @@ from PIL import Image, ImageDraw, ImageFont
 import pystray
 import winreg
 
-# Supported Vendor IDs (Beken 0x1d57, CompX 0x25a7, etc.)
-SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf}
+# Supported Vendor IDs (Beken 0x1d57, CompX 0x25a7, Pulsar 0x3710, etc.)
+SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x3710, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf}
 
 # Dictionary of supported Product IDs mapping to (Model Name, Connection Mode)
 SUPPORTED_DEVICES = {
@@ -37,6 +37,10 @@ SUPPORTED_DEVICES = {
     (0x25a7, 0xfa7b): ("Pulsar Xlite Wireless", "wired"),
     0xfa7c: ("Pulsar Xlite Wireless", "wireless"),
     0xfa7b: ("Pulsar Xlite Wireless", "wired"),
+
+    # Pulsar 8K Dongle Gen.2
+    (0x3710, 0x5406): ("Pulsar 8K Dongle Gen.2", "wireless"),
+    0x5406: ("Pulsar 8K Dongle Gen.2", "wireless"),
 }
 
 # Helper functions for Windows startup registry keys
