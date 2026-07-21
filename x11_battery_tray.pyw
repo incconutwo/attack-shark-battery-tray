@@ -7,24 +7,40 @@ from PIL import Image, ImageDraw, ImageFont
 import pystray
 import winreg
 
-# USB VID for Attack Shark / Beken OEM
-VID = 0x1d57
+# Supported Vendor IDs (Beken 0x1d57, CompX 0x25a7, Pulsar 0x3710, etc.)
+SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x3710, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf}
 
 # Dictionary of supported Product IDs mapping to (Model Name, Connection Mode)
 SUPPORTED_DEVICES = {
     # Attack Shark X11
+    (0x1d57, 0xfa60): ("Attack Shark X11", "wireless"),
+    (0x1d57, 0xfa55): ("Attack Shark X11", "wired"),
     0xfa60: ("Attack Shark X11", "wireless"),
     0xfa55: ("Attack Shark X11", "wired"),
     
     # Attack Shark R1
+    (0x1d57, 0xfa61): ("Attack Shark R1", "wired"),
     0xfa61: ("Attack Shark R1", "wired"),
     
     # Attack Shark X3
+    (0x1d57, 0xfa50): ("Attack Shark X3", "wired"),
     0xfa50: ("Attack Shark X3", "wired"),
     
     # Attack Shark X6
+    (0x1d57, 0xfa62): ("Attack Shark X6", "wireless"),
+    (0x1d57, 0xfa56): ("Attack Shark X6", "wired"),
     0xfa62: ("Attack Shark X6", "wireless"),
     0xfa56: ("Attack Shark X6", "wired"),
+
+    # Pulsar Xlite Wireless
+    (0x25a7, 0xfa7c): ("Pulsar Xlite Wireless", "wireless"),
+    (0x25a7, 0xfa7b): ("Pulsar Xlite Wireless", "wired"),
+    0xfa7c: ("Pulsar Xlite Wireless", "wireless"),
+    0xfa7b: ("Pulsar Xlite Wireless", "wired"),
+
+    # Pulsar 8K Dongle Gen.2
+    (0x3710, 0x5406): ("Pulsar 8K Dongle Gen.2", "wireless"),
+    0x5406: ("Pulsar 8K Dongle Gen.2", "wireless"),
 }
 
 # Helper functions for Windows startup registry keys
@@ -138,14 +154,17 @@ class BatteryTrayApp:
             self.icon.title = f"{model}: {self.last_battery}%"
 
     def find_device_path(self):
-        # Scan for any device matching the Attack Shark/Beken Vendor ID (0x1d57),
+        # Scan for any device matching supported VIDs (0x1d57, 0x25a7, etc.),
         # matching interface 2 and usage page 10.
         for d in hid.enumerate():
-            if d['vendor_id'] == VID and d['interface_number'] == 2 and d['usage_page'] == 10:
-                pid = d['product_id']
-                
-                # Check if it's in our known supported devices list
-                if pid in SUPPORTED_DEVICES:
+            vid = d['vendor_id']
+            pid = d['product_id']
+            if vid in SUPPORTED_VIDS and d['interface_number'] == 2 and d['usage_page'] == 10:
+                # Check if exact (vid, pid) or pid is in supported list
+                if (vid, pid) in SUPPORTED_DEVICES:
+                    model_name, mode = SUPPORTED_DEVICES[(vid, pid)]
+                    return d['path'], mode, model_name
+                elif pid in SUPPORTED_DEVICES:
                     model_name, mode = SUPPORTED_DEVICES[pid]
                     return d['path'], mode, model_name
                 
@@ -161,9 +180,9 @@ class BatteryTrayApp:
                     mode = "wireless"
                 
                 # Use product string or format generic name
-                model_name = d.get('product_string', 'Attack Shark Mouse')
-                if model_name == '2.4G Wireless Device':
-                    model_name = "Attack Shark Mouse"
+                model_name = d.get('product_string', 'Gaming Mouse')
+                if model_name in ['2.4G Wireless Device', '2.4G Receiver']:
+                    model_name = "Wireless Mouse"
                 return d['path'], mode, model_name
                 
         return None, None, None
