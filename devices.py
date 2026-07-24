@@ -176,29 +176,44 @@ def read_wlmouse_battery(path: str) -> Tuple[Optional[int], Optional[bool]]:
 
 
 def find_device_path() -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Scan HID devices for standard supported mice."""
+    """Scan HID devices for standard supported mice across all vendor interfaces."""
+    fallback = None
     for d in hid.enumerate():
         vid = d['vendor_id']
         pid = d['product_id']
-        if vid in SUPPORTED_VIDS and d['interface_number'] == 2 and d['usage_page'] == 10:
+        if vid in SUPPORTED_VIDS:
+            if_num = d.get('interface_number', -1)
+            usage_page = d.get('usage_page', 0)
+            
+            # Flexible preferred vendor status endpoint check:
+            # Matches interface 2, interface 1, usage page 10 (0x0A), or vendor custom pages (>= 0xff00)
+            is_preferred = (
+                (if_num == 2 and usage_page == 10) or
+                (usage_page == 10) or
+                (usage_page >= 0xff00) or
+                (if_num in (1, 2))
+            )
+            
+            model_name = "Gaming Mouse"
+            mode = "wireless"
+            
             if (vid, pid) in SUPPORTED_DEVICES:
                 model_name, mode = SUPPORTED_DEVICES[(vid, pid)]
-                return d['path'], mode, model_name
             elif pid in SUPPORTED_DEVICES:
                 model_name, mode = SUPPORTED_DEVICES[pid]
-                return d['path'], mode, model_name
-            
-            prod_string = str(d.get('product_string', '')).lower()
-            if "wired" in prod_string:
-                mode = "wired"
-            elif "wireless" in prod_string or "receiver" in prod_string or "dongle" in prod_string:
-                mode = "wireless"
             else:
-                mode = "wireless"
+                prod_string = str(d.get('product_string', '')).lower()
+                if "wired" in prod_string:
+                    mode = "wired"
+                else:
+                    mode = "wireless"
+                model_name = d.get('product_string', 'Gaming Mouse')
+                if model_name in ['2.4G Wireless Device', '2.4G Receiver']:
+                    model_name = "Wireless Mouse"
             
-            model_name = d.get('product_string', 'Gaming Mouse')
-            if model_name in ['2.4G Wireless Device', '2.4G Receiver']:
-                model_name = "Wireless Mouse"
-            return d['path'], mode, model_name
-            
-    return None, None, None
+            if is_preferred:
+                return d['path'], mode, model_name
+            elif fallback is None:
+                fallback = (d['path'], mode, model_name)
+                
+    return fallback if fallback else (None, None, None)
