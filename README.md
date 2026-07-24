@@ -105,5 +105,12 @@ pip install hidapi pystray pillow
 
 ## Acknowledgments & Credits
 
-Special thanks to [@HarukaYamamoto0](https://github.com/HarukaYamamoto0) ([attack-shark-x11-driver](https://github.com/HarukaYamamoto0/attack-shark-x11-driver)) for sharing additional Beken OEM model device ID mappings.
+Special thanks to all community members who contributed device ID mappings and hardware dumps:
+
+- **[@len0c](https://github.com/len0c)** – Reverse-engineered HID protocol handling and initial integration for the **WLMouse Beast X** series.
+- **[@HarukaYamamoto0](https://github.com/HarukaYamamoto0)** – Shared additional Beken OEM model device ID mappings ([attack-shark-x11-driver](https://github.com/HarukaYamamoto0/attack-shark-x11-driver)).
+- **[@CptNinja](https://github.com/CptNinja)** – Provided hardware ID dump for the **Pulsar 8K Dongle Gen.2** (`VID 0x3710`, `PID 0x5406`).
+- **[@nzeck1](https://github.com/nzeck1)** – Provided hardware ID dump for the **VXE R1 Series** (R1 / R1 SE / R1 SE+).
+- **TwistedVincenzo** – Provided hardware ID dump for the **Pulsar Xlite Wireless** (`VID 0x25a7`, `PID 0xfa7c` / `0xfa7b`).
+
 

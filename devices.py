@@ -28,17 +28,17 @@ SUPPORTED_DEVICES = {
     0xfa62: ("Attack Shark X6", "wireless"),
     0xfa56: ("Attack Shark X6", "wired"),
 
-    # Pulsar Xlite Wireless
+    # Pulsar Xlite Wireless (Thanks to TwistedVincenzo)
     (0x25a7, 0xfa7c): ("Pulsar Xlite Wireless", "wireless"),
     (0x25a7, 0xfa7b): ("Pulsar Xlite Wireless", "wired"),
     0xfa7c: ("Pulsar Xlite Wireless", "wireless"),
     0xfa7b: ("Pulsar Xlite Wireless", "wired"),
 
-    # Pulsar 8K Dongle Gen.2
+    # Pulsar 8K Dongle Gen.2 (Thanks to @CptNinja)
     (0x3710, 0x5406): ("Pulsar 8K Dongle Gen.2", "wireless"),
     0x5406: ("Pulsar 8K Dongle Gen.2", "wireless"),
 
-    # VXE R1 Series (R1 / R1 SE / R1 SE+)
+    # VXE R1 Series (R1 / R1 SE / R1 SE+) (Thanks to @nzeck1)
     (0x3554, 0xf58e): ("VXE R1 Series", "wireless"),
     (0x320f, 0x5055): ("VXE R1 Series", "wireless"),
     (0x3537, 0x2106): ("VXE R1 Series", "wireless"),
@@ -48,7 +48,7 @@ SUPPORTED_DEVICES = {
 }
 
 # =============================================================================
-# WLMouse Beast X family
+# WLMouse Beast X family (Protocol reverse-engineering by @len0c)
 # =============================================================================
 WLMOUSE_VID = 0x36a7
 
