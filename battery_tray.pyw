@@ -20,6 +20,8 @@ from config import (
     get_show_estimate,
     set_show_estimate,
     is_light_mode,
+    get_battery_history,
+    set_battery_history,
 )
 from updater import (
     __version__,
@@ -54,7 +56,9 @@ class BatteryTrayApp:
         
         # Hours Estimate state (saved in registry)
         self.show_estimate: bool = get_show_estimate()
-        self.battery_history: List[Tuple[float, int]] = []
+        saved_history, saved_anchored = get_battery_history()
+        self.battery_history: List[Tuple[float, int]] = saved_history
+        self.is_anchored: bool = saved_anchored
         
         # Update checker state
         self.latest_version: Optional[str] = None
@@ -194,29 +198,38 @@ class BatteryTrayApp:
         now = time.time()
         if charging:
             self.battery_history.clear()
+            self.is_anchored = False
+            set_battery_history([], False)
         elif battery >= 0:
             if not self.battery_history:
                 # App started tracking at initial level (e.g. 81%). Wait for first drop to anchor.
-                self.battery_history.append((now, battery))
+                self.battery_history = [(now, battery)]
+                self.is_anchored = False
+                set_battery_history(self.battery_history, False)
             else:
                 last_time, last_pct = self.battery_history[-1]
                 time_since_last = now - last_time
                 
                 # Exclude long idle / PC sleep gaps (> 30 min without a drop)
-                if time_since_last > 1800:
+                if time_since_last > 1800 and battery != last_pct:
                     self.battery_history = [(now, battery)]
+                    self.is_anchored = False
+                    set_battery_history(self.battery_history, False)
                 elif battery < last_pct:
                     # Battery level dropped!
-                    if len(self.battery_history) == 1:
-                        # First drop (e.g. 81% -> 80%). Set this drop timestamp as true anchor point.
+                    if not self.is_anchored:
+                        # First drop (e.g. 81% -> 80%). Anchor this timestamp for 80%!
                         self.battery_history = [(now, battery)]
+                        self.is_anchored = True
                     else:
                         # Subsequent drop (e.g. 80% -> 79%). Append to history.
                         self.battery_history.append((now, battery))
+                    set_battery_history(self.battery_history, True)
                 elif battery > last_pct + 3:
                     # Battery increased significantly without charging flag: reset history
-                    self.battery_history.clear()
-                    self.battery_history.append((now, battery))
+                    self.battery_history = [(now, battery)]
+                    self.is_anchored = False
+                    set_battery_history(self.battery_history, False)
 
             self.battery_history = [(t, b) for t, b in self.battery_history if now - t <= 14400]
 
@@ -381,12 +394,21 @@ class BatteryTrayApp:
                 try:
                     data = dev.read(64)
                     if data:
-                        # Parse battery packet: [0x03, device_id, 0x40, 0x01, battery_pct]
+                        # Parse battery packet: [0x03, device_id, 0x40, 0x01, battery_val, charging_flag]
                         # device_id is model-specific (e.g. 0x55=X11, 0x4d=X3, 0x10=R1, 0x85=X6, 0xbe=X11 Pro, 0x07=X11 SE)
                         if len(data) >= 5 and data[0] == 0x03 and data[2] == 0x40 and data[3] == 0x01:
-                            battery = data[4]
+                            raw_batt = data[4]
+                            # Some firmware (e.g. X6) reports battery on a 1-10 scale (10 = 100%)
+                            if 0 < raw_batt <= 10:
+                                battery = raw_batt * 10
+                            else:
+                                battery = raw_batt
+                            
+                            # Check wireless/dock charging status flag at byte 5
+                            charging = bool(len(data) >= 6 and data[5] in (1, 2, 0x01, 0x02))
+                            
                             if 0 <= battery <= 100:
-                                self.update_battery_level(battery, charging=False)
+                                self.update_battery_level(battery, charging=charging)
                                 last_recv_time = time.time()
                     time.sleep(0.1)
                 except OSError:
