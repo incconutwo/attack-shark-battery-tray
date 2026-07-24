@@ -5,7 +5,7 @@ from typing import Optional, Tuple, List
 # =============================================================================
 # Supported Standard Devices (Beken, CompX, Pulsar, etc.)
 # =============================================================================
-SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x3710, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf, 0x3554, 0x320f, 0x3537}
+SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x3710, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf, 0x3554, 0x320f, 0x3537, 0x3770}
 
 SUPPORTED_DEVICES = {
     # Attack Shark X11
@@ -45,6 +45,10 @@ SUPPORTED_DEVICES = {
     0xf58e: ("VXE R1 Series", "wireless"),
     0x5055: ("VXE R1 Series", "wireless"),
     0x2106: ("VXE R1 Series", "wireless"),
+
+    # Hitscan Hyperlight (Thanks to @Vinsmok3)
+    (0x3770, 0x0300): ("Hitscan Hyperlight", "wireless"),
+    0x0300: ("Hitscan Hyperlight", "wireless"),
 }
 
 # =============================================================================

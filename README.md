@@ -23,6 +23,7 @@ The application officially recognizes the following models, with a dynamic gener
 | **Attack Shark R1** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
 | **Attack Shark X3** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
 | **VXE R1 Series (R1 / SE / SE+)** | 🟢 Supported | 🟢 Supported | CompX/Evision/Zikway dongles (VID 0x3554, 0x320f, 0x3537) |
+| **Hitscan Hyperlight** | 🟢 Supported | 🟡 Untested | Verified 8K wireless dongle (VID 0x3770) |
 | **Other Beken/CompX/WLMouse** | 🟡 Auto-Detected | 🟡 Auto-Detected | Works generically via fallback logic |
 
 ---
@@ -111,6 +112,7 @@ Special thanks to all community members who contributed device ID mappings and h
 - **[@HarukaYamamoto0](https://github.com/HarukaYamamoto0)** – Shared additional Beken OEM model device ID mappings ([attack-shark-x11-driver](https://github.com/HarukaYamamoto0/attack-shark-x11-driver)).
 - **[@CptNinja](https://github.com/CptNinja)** – Provided hardware ID dump for the **Pulsar 8K Dongle Gen.2** (`VID 0x3710`, `PID 0x5406`).
 - **[@nzeck1](https://github.com/nzeck1)** – Provided hardware ID dump for the **VXE R1 Series** (R1 / R1 SE / R1 SE+).
+- **[@Vinsmok3](https://github.com/Vinsmok3)** – Provided hardware ID dump for the **Hitscan Hyperlight** (`VID 0x3770`, `PID 0x0300`).
 - **TwistedVincenzo** – Provided hardware ID dump for the **Pulsar Xlite Wireless** (`VID 0x25a7`, `PID 0xfa7c` / `0xfa7b`).
 
 
