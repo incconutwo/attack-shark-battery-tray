@@ -22,6 +22,7 @@ The application officially recognizes the following models, with a dynamic gener
 | **Pulsar 8K Dongle Gen.2** | 🟢 Supported | 🟡 Untested | Verified 8K wireless dongle (VID 0x3710) |
 | **Attack Shark R1** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
 | **Attack Shark X3** | 🟢 Supported | 🟢 Supported | Wireless auto-detected generically |
+| **VXE R1 Series (R1 / SE / SE+)** | 🟢 Supported | 🟢 Supported | CompX/Evision/Zikway dongles (VID 0x3554, 0x320f, 0x3537) |
 | **Other Beken/CompX/WLMouse** | 🟡 Auto-Detected | 🟡 Auto-Detected | Works generically via fallback logic |
 
 ---
@@ -37,7 +38,7 @@ We've made this process incredibly easy by including a standalone **Hardware ID 
 3. The wizard will automatically generate the clean Python dictionary configuration lines for your device.
 4. Copy the generated block and paste it into a GitHub issue or Reddit reply!
 
-If you want to manually add support yourself, you can simply append your Product ID to the `SUPPORTED_DEVICES` or `WLMOUSE_DEVICES` dictionary at the top of `battery_tray.pyw`:
+If you want to manually add support yourself, you can simply append your Product ID to the `SUPPORTED_DEVICES` or `WLMOUSE_DEVICES` dictionary in `devices.py`:
 
 ```python
 SUPPORTED_DEVICES = {
@@ -54,11 +55,14 @@ SUPPORTED_DEVICES = {
   - 🟢 **Green** ($\ge 50\%$) - Healthy charge
   - 🟠 **Orange** ($20\% - 49\%$) - Moderate charge
   - 🔴 **Red** ($< 20\%$) - Low battery (time to charge)
-- **Charging Detection:** Automatically detects wired connection/charging state and displays **`Chg`** (in blue) or percentage with charging tooltip.
-- **Offline Detection:** Displays **`??`** (in grey) if the mouse goes out of range or is switched off.
+- **Auto Taskbar Theme Detection:** Automatically adapts icon colors and contrast for Windows **Light Mode** and **Dark Mode** taskbars without extra configuration options.
+- **Intelligent Hours Estimate:** Real-time battery discharge slope tracking with minimalistic tooltip predictions (e.g., `Mouse: 85% (~12h)` or `42% (~4h 30m)`), complete with a menu toggle.
+- **Configurable Low Battery Alerts:** Sends a Windows toast notification when battery reaches your chosen threshold (25%, 20%, 15%, 10%, or Disabled).
+- **Update Checker:** Asynchronously checks for new releases on GitHub directly from the right-click tray menu (`Check for Updates`).
+- **Clean Connection & Charging States:** Displays **`Chg`** (blue) while charging, **`--`** (grey) while awaiting initial reading, and **`??`** when disconnected.
 - **Start with Windows Toggle:** Right-click the icon to toggle startup behavior. It writes directly to your user registry (`HKCU`), requiring **zero Administrator (UAC) prompts**.
 - **Multi-Brand Compatibility:** Supports Beken-OEM firmware (`VID: 0x1d57`), CompX/Pulsar (`VID: 0x25a7`, `0x3710`), and WLMouse (`VID: 0x36a7`).
-- **Ultralight:** Uses near-zero CPU and negligible RAM.
+
 
 ---
 
@@ -96,3 +100,10 @@ pip install hidapi pystray pillow
   Ensure the mouse is turned on, in wireless mode (using the 2.4G adapter), and not asleep. Wake the mouse by moving it around for the first battery status packet to transmit.
 - **Permissions Issue:**
   The app runs entirely in user-space and does not require admin rights. If the tray icon doesn't update, check if another exclusive tool (like the official software) is currently open and locking the USB receiver port.
+
+---
+
+## Acknowledgments & Credits
+
+Special thanks to [@HarukaYamamoto0](https://github.com/HarukaYamamoto0) for reverse engineering and documenting the Beken/Attack Shark mouse HID messaging protocol and device ID mappings in the [attack-shark-x11-driver](https://github.com/HarukaYamamoto0/attack-shark-x11-driver) repository.
+

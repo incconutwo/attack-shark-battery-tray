@@ -1,203 +1,39 @@
 import sys
-import os
 import time
 import threading
+import urllib.request
+import json
+import webbrowser
+import ctypes
 from typing import Optional, Tuple, List
 
 import hid
-from PIL import Image, ImageDraw, ImageFont
 import pystray
-import winreg
 
-# =============================================================================
-# Supported Standard Devices (Beken, CompX, Pulsar, etc.)
-# =============================================================================
-SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x3710, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf}
-
-SUPPORTED_DEVICES = {
-    # Attack Shark X11
-    (0x1d57, 0xfa60): ("Attack Shark X11", "wireless"),
-    (0x1d57, 0xfa55): ("Attack Shark X11", "wired"),
-    0xfa60: ("Attack Shark X11", "wireless"),
-    0xfa55: ("Attack Shark X11", "wired"),
-    
-    # Attack Shark R1
-    (0x1d57, 0xfa61): ("Attack Shark R1", "wired"),
-    0xfa61: ("Attack Shark R1", "wired"),
-    
-    # Attack Shark X3
-    (0x1d57, 0xfa50): ("Attack Shark X3", "wired"),
-    0xfa50: ("Attack Shark X3", "wired"),
-    
-    # Attack Shark X6
-    (0x1d57, 0xfa62): ("Attack Shark X6", "wireless"),
-    (0x1d57, 0xfa56): ("Attack Shark X6", "wired"),
-    0xfa62: ("Attack Shark X6", "wireless"),
-    0xfa56: ("Attack Shark X6", "wired"),
-
-    # Pulsar Xlite Wireless
-    (0x25a7, 0xfa7c): ("Pulsar Xlite Wireless", "wireless"),
-    (0x25a7, 0xfa7b): ("Pulsar Xlite Wireless", "wired"),
-    0xfa7c: ("Pulsar Xlite Wireless", "wireless"),
-    0xfa7b: ("Pulsar Xlite Wireless", "wired"),
-
-    # Pulsar 8K Dongle Gen.2
-    (0x3710, 0x5406): ("Pulsar 8K Dongle Gen.2", "wireless"),
-    0x5406: ("Pulsar 8K Dongle Gen.2", "wireless"),
-}
-
-# =============================================================================
-# WLMouse Beast X family
-# =============================================================================
-WLMOUSE_VID = 0x36a7
-
-WLMOUSE_DEVICES = {
-    0xa887: "WLMouse Beast X",
-    0xa868: "WLMouse Beast X Mini Pro",
-}
-
-WLMOUSE_QUERY = [0x00, 0x00, 0x02, 0x02, 0x00, 0x83]
-
-
-# =============================================================================
-# Registry Helpers
-# =============================================================================
-def is_startup_enabled() -> bool:
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ) as key:
-            winreg.QueryValueEx(key, "MouseBatteryTray")
-            return True
-    except (FileNotFoundError, OSError):
-        return False
-
-
-def set_startup(enabled: bool) -> bool:
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    name = "MouseBatteryTray"
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS) as key:
-            if enabled:
-                if getattr(sys, 'frozen', False):
-                    cmd = f'"{sys.executable}"'
-                else:
-                    script_path = os.path.abspath(sys.argv[0])
-                    pythonw_path = sys.executable.replace("python.exe", "pythonw.exe")
-                    cmd = f'"{pythonw_path}" "{script_path}"'
-                winreg.SetValueEx(key, name, 0, winreg.REG_SZ, cmd)
-            else:
-                try:
-                    winreg.DeleteValue(key, name)
-                except FileNotFoundError:
-                    pass
-        return True
-    except Exception as e:
-        print(f"Error setting registry startup: {e}")
-        return False
-
-
-# =============================================================================
-# WLMouse Handlers
-# =============================================================================
-def _wlmouse_parse(resp: List[int]) -> Tuple[Optional[int], Optional[bool]]:
-    """Parse a data reply 'a1 00 02 02 00 83 <charge> <batt>' -> (batt, charging)."""
-    if not resp:
-        return None, None
-    for i in range(5, len(resp) - 2):
-        if (resp[i] == 0x83 and resp[i - 1] == 0x00 and resp[i - 2] == 0x02
-                and resp[i - 5] in (0xa1, 0xa2)):
-            charge = resp[i + 1]
-            batt = resp[i + 2]
-            if 0 <= batt <= 100:
-                return batt, bool(charge)
-    return None, None
-
-
-def _wlmouse_read_feature(path: str) -> Tuple[Optional[int], Optional[bool]]:
-    """Active: replay the HUB's 0x83 read, poll the feature report for the reply."""
-    try:
-        dev = hid.device()
-        dev.open_path(path.encode('utf-8') if isinstance(path, str) else path)
-    except OSError:
-        return None, None
-    try:
-        report = [0x00] + WLMOUSE_QUERY + [0x00] * (64 - len(WLMOUSE_QUERY))
-        try:
-            dev.send_feature_report(report)
-        except OSError:
-            pass
-        for _ in range(15):
-            time.sleep(0.05)
-            for length in (65, 64):
-                try:
-                    resp = dev.get_feature_report(0, length)
-                except OSError:
-                    resp = None
-                if resp:
-                    batt, charging = _wlmouse_parse(list(resp))
-                    if batt is not None:
-                        return batt, charging
-        return None, None
-    finally:
-        try:
-            dev.close()
-        except Exception:
-            pass
-
-
-def _wlmouse_read_passive(path: str, seconds: float = 6.0) -> Tuple[Optional[int], Optional[bool]]:
-    """Fallback: catch the '03 00 <batt> <charge>' heartbeat. No writes at all."""
-    try:
-        dev = hid.device()
-        dev.open_path(path.encode('utf-8') if isinstance(path, str) else path)
-        dev.set_nonblocking(True)
-    except OSError:
-        return None, None
-    deadline = time.time() + seconds
-    try:
-        while time.time() < deadline:
-            try:
-                data = dev.read(64)
-            except OSError:
-                break
-            if data:
-                d = list(data)
-                for off in (0, 1):
-                    if len(d) >= off + 4 and d[off] == 0x03 and d[off + 1] == 0x00:
-                        batt = d[off + 2]
-                        if 0 <= batt <= 100:
-                            return batt, bool(d[off + 3])
-            time.sleep(0.02)
-    finally:
-        try:
-            dev.close()
-        except Exception:
-            pass
-    return None, None
-
-
-def find_wlmouse() -> Tuple[Optional[str], Optional[str], Optional[int]]:
-    """Return (path, model_name, pid) for the WLMouse feature interface."""
-    fallback = None
-    for d in hid.enumerate(WLMOUSE_VID):
-        pid = d['product_id']
-        name = WLMOUSE_DEVICES.get(pid) or d.get('product_string') or "WLMouse Device"
-        if d.get('usage_page') == 0xffff and d.get('usage') == 0x00:
-            return d['path'], name, pid
-        if d.get('usage_page') == 0xffff and fallback is None:
-            fallback = (d['path'], name, pid)
-    return fallback if fallback else (None, None, None)
-
-
-def read_wlmouse_battery(path: str) -> Tuple[Optional[int], Optional[bool]]:
-    """Return (battery%, charging) or (None, None)."""
-    batt, charging = _wlmouse_read_feature(path)
-    if batt is not None:
-        return batt, charging
-    for d in hid.enumerate(WLMOUSE_VID):
-        b, c = _wlmouse_read_passive(d['path'], seconds=4.0)
-        if b is not None:
-            return b, c
-    return None, None
+from config import (
+    trim_memory,
+    acquire_single_instance,
+    is_startup_enabled,
+    set_startup,
+    get_alert_threshold,
+    set_alert_threshold,
+    get_show_estimate,
+    set_show_estimate,
+    is_light_mode,
+)
+from updater import (
+    __version__,
+    GITHUB_REPO_URL,
+    GITHUB_RELEASES_API,
+    GITHUB_RELEASES_URL,
+    is_newer_version,
+)
+from devices import (
+    find_device_path,
+    find_wlmouse,
+    read_wlmouse_battery,
+)
+from icon_drawer import get_icon_data
 
 
 # =============================================================================
@@ -212,60 +48,248 @@ class BatteryTrayApp:
         self.charging = False
         self.current_model = "Mouse"
         
+        # Alert threshold & state (saved in registry)
+        self.alert_threshold: int = get_alert_threshold()
+        self.has_alerted: bool = False
+        
+        # Hours Estimate state (saved in registry)
+        self.show_estimate: bool = get_show_estimate()
+        self.battery_history: List[Tuple[float, int]] = []
+        
+        # Update checker state
+        self.latest_version: Optional[str] = None
+        self.update_url: str = GITHUB_RELEASES_URL
+        self.update_status: str = "idle"  # idle | checking | available | up_to_date | error
+        self.last_update_check_time: float = time.time()
+        
+        # Icon caching, theme & polling state
+        self.last_theme: bool = is_light_mode()
+        self._icon_cache = {}
         self.poll_thread = threading.Thread(target=self.poll_loop, daemon=True)
-        
-    def create_image(self, text: str, text_color: Tuple[int, int, int]) -> Image.Image:
-        width, height = 64, 64
-        image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(image)
-        
-        font = None
-        try:
-            font = ImageFont.truetype("arialbd.ttf", 54 if len(text) <= 2 else 34)
-        except OSError:
-            try:
-                font = ImageFont.truetype("arial.ttf", 54 if len(text) <= 2 else 34)
-            except OSError:
-                font = ImageFont.load_default()
-            
-        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
-        text_width = right - left
-        text_height = bottom - top
-        
-        x = (width - text_width) / 2 - left
-        y = (height - text_height) / 2 - top
-            
-        draw.text((x, y), text, fill=text_color, font=font)
-        return image
 
-    def get_icon_data(self) -> Image.Image:
-        if self.status == "disconnected":
-            return self.create_image("??", (150, 150, 150))
-        elif self.status == "charging" and self.last_battery < 0:
-            return self.create_image("Chg", (52, 152, 219))
-        elif self.status == "unknown":
-            return self.create_image("?", (155, 89, 182))
+    def check_for_updates(self, manual: bool = False):
+        """Asynchronously fetch the latest release tag from GitHub."""
+        self.update_status = "checking"
+        if self.icon:
+            self.icon.menu = self.create_menu()
+
+        def _worker():
+            try:
+                req = urllib.request.Request(
+                    GITHUB_RELEASES_API,
+                    headers={"User-Agent": "MouseBatteryTray-UpdateChecker"}
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode('utf-8'))
+                        tag_name = data.get("tag_name", "")
+                        html_url = data.get("html_url", GITHUB_RELEASES_URL)
+                        self.update_url = html_url
+                        if tag_name and is_newer_version(tag_name, __version__):
+                            self.latest_version = tag_name
+                            self.update_status = "available"
+                        else:
+                            self.update_status = "up_to_date"
+                    else:
+                        self.update_status = "error"
+            except urllib.error.HTTPError as e:
+                # 404 means no release exists yet on GitHub
+                if e.code == 404:
+                    self.update_status = "up_to_date"
+                else:
+                    self.update_status = "error"
+            except Exception:
+                self.update_status = "error"
+
+            if self.icon:
+                self.icon.menu = self.create_menu()
+                if manual:
+                    if self.update_status == "up_to_date":
+                        try:
+                            self.icon.notify(f"You are on the latest version ({__version__}).", "Mouse Battery Tray")
+                        except Exception:
+                            pass
+                    elif self.update_status == "error":
+                        try:
+                            self.icon.notify("Could not check for updates. Please try again later.", "Mouse Battery Tray")
+                        except Exception:
+                            pass
+                if self.update_status == "available":
+                    try:
+                        self.icon.notify(f"New update {self.latest_version} available! Click menu to download.", "Mouse Battery Tray")
+                    except Exception:
+                        pass
+            trim_memory()
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def open_update_url(self, icon, item):
+        webbrowser.open(self.update_url)
+
+    def open_repo_url(self, icon, item):
+        webbrowser.open(GITHUB_REPO_URL)
+
+    def on_check_updates_click(self, icon, item):
+        self.check_for_updates(manual=True)
+
+    def toggle_show_estimate(self, icon, item):
+        self.show_estimate = not self.show_estimate
+        set_show_estimate(self.show_estimate)
+        self.update_tray()
+        if self.icon:
+            self.icon.menu = self.create_menu()
+
+    def set_threshold(self, threshold: int):
+        self.alert_threshold = threshold
+        set_alert_threshold(threshold)
+        if self.alert_threshold == 0 or self.last_battery > self.alert_threshold:
+            self.has_alerted = False
+        if self.icon:
+            self.icon.menu = self.create_menu()
+
+    def get_battery_estimate_str(self) -> Optional[str]:
+        if not self.show_estimate or self.charging or self.last_battery <= 0:
+            return None
+            
+        if len(self.battery_history) < 2:
+            return None
+            
+        now = time.time()
+        recent_history = [(t, b) for t, b in self.battery_history if now - t <= 14400]
+        if len(recent_history) < 2:
+            return None
+            
+        t_first, b_first = recent_history[0]
+        t_last, b_last = recent_history[-1]
+        
+        time_span = t_last - t_first
+        pct_drop = b_first - b_last
+        
+        if time_span < 30 or pct_drop <= 0:
+            return None
+            
+        drain_rate = pct_drop / time_span
+        if drain_rate <= 0:
+            return None
+            
+        remaining_seconds = self.last_battery / drain_rate
+        hours = int(remaining_seconds // 3600)
+        minutes = int((remaining_seconds % 3600) // 60)
+        
+        if hours > 300:
+            return None
+            
+        if hours >= 1:
+            return f"~{hours}h {minutes}m" if minutes > 0 else f"~{hours}h"
+        elif minutes > 0:
+            return f"~{minutes}m"
         else:
-            pct = self.last_battery
-            if self.status == "charging":
-                color = (52, 152, 219)
-            elif pct >= 50:
-                color = (46, 204, 113)
-            elif pct >= 20:
-                color = (230, 126, 34)
+            return "~<1m"
+
+    def update_battery_level(self, battery: int, charging: bool = False):
+        self.last_battery = battery
+        self.charging = charging
+        self.status = "charging" if charging else "connected"
+        
+        now = time.time()
+        if charging:
+            self.battery_history.clear()
+        elif battery >= 0:
+            if not self.battery_history:
+                # App started tracking at initial level (e.g. 81%). Wait for first drop to anchor.
+                self.battery_history.append((now, battery))
             else:
-                color = (231, 76, 60)
-            return self.create_image(str(pct), color)
+                last_time, last_pct = self.battery_history[-1]
+                time_since_last = now - last_time
+                
+                # Exclude long idle / PC sleep gaps (> 30 min without a drop)
+                if time_since_last > 1800:
+                    self.battery_history = [(now, battery)]
+                elif battery < last_pct:
+                    # Battery level dropped!
+                    if len(self.battery_history) == 1:
+                        # First drop (e.g. 81% -> 80%). Set this drop timestamp as true anchor point.
+                        self.battery_history = [(now, battery)]
+                    else:
+                        # Subsequent drop (e.g. 80% -> 79%). Append to history.
+                        self.battery_history.append((now, battery))
+                elif battery > last_pct + 3:
+                    # Battery increased significantly without charging flag: reset history
+                    self.battery_history.clear()
+                    self.battery_history.append((now, battery))
+
+            self.battery_history = [(t, b) for t, b in self.battery_history if now - t <= 14400]
+
+        self.update_tray()
+
+        # Trigger Low Battery Toast Notification if below threshold
+        threshold = self.alert_threshold
+        if threshold > 0 and not charging:
+            if battery <= threshold and not self.has_alerted:
+                self.has_alerted = True
+                if self.icon:
+                    try:
+                        model = self.current_model or "Mouse"
+                        self.icon.notify(
+                            f"{model} battery level is low ({battery}%). Please connect charger.",
+                            "Low Battery Alert"
+                        )
+                    except Exception:
+                        pass
+            elif battery > threshold + 5:
+                self.has_alerted = False
+        elif charging:
+            self.has_alerted = False
+
+    def create_menu(self) -> pystray.Menu:
+        items = []
+        if self.update_status == "available" and self.latest_version:
+            items.append(pystray.MenuItem(f"🚀 Update Available ({self.latest_version})", self.open_update_url))
+            items.append(pystray.Menu.SEPARATOR)
+        
+        def _make_threshold_item(val: int, label: str):
+            return pystray.MenuItem(
+                label,
+                lambda icon, item: self.set_threshold(val),
+                checked=lambda item: self.alert_threshold == val,
+                radio=True
+            )
+
+        threshold_menu = pystray.Menu(
+            _make_threshold_item(25, "25%"),
+            _make_threshold_item(20, "20% (Default)"),
+            _make_threshold_item(15, "15%"),
+            _make_threshold_item(10, "10%"),
+            pystray.Menu.SEPARATOR,
+            _make_threshold_item(0, "Disabled")
+        )
+
+        items.append(pystray.MenuItem("Start with Windows", self.toggle_startup, checked=lambda item: is_startup_enabled()))
+        items.append(pystray.MenuItem("Show Hours Estimate", self.toggle_show_estimate, checked=lambda item: self.show_estimate))
+        items.append(pystray.MenuItem("Low Battery Alert", threshold_menu))
+
+        if self.update_status == "checking":
+            items.append(pystray.MenuItem("🔄 Checking for updates...", None, enabled=False))
+        else:
+            items.append(pystray.MenuItem("Check for Updates", self.on_check_updates_click))
+            
+        items.append(pystray.Menu.SEPARATOR)
+        items.append(pystray.MenuItem(f"Mouse Battery Tray {__version__}", self.open_repo_url))
+        items.append(pystray.MenuItem("Exit", self.on_exit))
+        return pystray.Menu(*items)
 
     def update_tray(self):
         if not self.icon:
             return
         
-        self.icon.icon = self.get_icon_data()
+        self.last_theme = is_light_mode()
+        self.icon.icon = get_icon_data(self.status, self.last_battery, self._icon_cache)
         
         model = self.current_model or "Mouse"
         if self.status == "disconnected":
             self.icon.title = f"{model}: Disconnected"
+        elif self.status == "connected" and self.last_battery < 0:
+            self.icon.title = f"{model}: Waiting for battery reading..."
         elif self.status == "charging" and self.last_battery < 0:
             self.icon.title = f"{model}: Charging/Wired"
         elif self.status == "charging":
@@ -273,38 +297,27 @@ class BatteryTrayApp:
         elif self.status == "unknown":
             self.icon.title = f"{model}: detected (battery unavailable)"
         else:
-            self.icon.title = f"{model}: {self.last_battery}%"
-
-    def find_device_path(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        for d in hid.enumerate():
-            vid = d['vendor_id']
-            pid = d['product_id']
-            if vid in SUPPORTED_VIDS and d['interface_number'] == 2 and d['usage_page'] == 10:
-                if (vid, pid) in SUPPORTED_DEVICES:
-                    model_name, mode = SUPPORTED_DEVICES[(vid, pid)]
-                    return d['path'], mode, model_name
-                elif pid in SUPPORTED_DEVICES:
-                    model_name, mode = SUPPORTED_DEVICES[pid]
-                    return d['path'], mode, model_name
-                
-                prod_string = str(d.get('product_string', '')).lower()
-                if "wired" in prod_string:
-                    mode = "wired"
-                elif "wireless" in prod_string or "receiver" in prod_string or "dongle" in prod_string:
-                    mode = "wireless"
-                else:
-                    mode = "wireless"
-                
-                model_name = d.get('product_string', 'Gaming Mouse')
-                if model_name in ['2.4G Wireless Device', '2.4G Receiver']:
-                    model_name = "Wireless Mouse"
-                return d['path'], mode, model_name
-                
-        return None, None, None
+            est_str = self.get_battery_estimate_str()
+            if est_str:
+                self.icon.title = f"{model}: {self.last_battery}% ({est_str})"
+            else:
+                self.icon.title = f"{model}: {self.last_battery}%"
 
     def poll_loop(self):
+        last_trim = time.time()
         while self.running:
-            path, mode, model_name = self.find_device_path()
+            if time.time() - last_trim > 60:
+                trim_memory()
+                last_trim = time.time()
+
+            if is_light_mode() != self.last_theme:
+                self.update_tray()
+
+            if time.time() - self.last_update_check_time >= 86400:
+                self.last_update_check_time = time.time()
+                self.check_for_updates(manual=False)
+
+            path, mode, model_name = find_device_path()
             if path:
                 self._handle_standard_device(path, mode, model_name)
                 continue
@@ -314,12 +327,10 @@ class BatteryTrayApp:
                 self.current_model = wl_name
                 battery, charging = read_wlmouse_battery(wl_path)
                 if battery is not None:
-                    self.last_battery = battery
-                    self.charging = bool(charging)
-                    self.status = "charging" if charging else "connected"
+                    self.update_battery_level(battery, bool(charging))
                 else:
                     self.status = "unknown"
-                self.update_tray()
+                    self.update_tray()
                 time.sleep(10)
                 continue
                 
@@ -344,14 +355,24 @@ class BatteryTrayApp:
             
             if self.status in ("disconnected", "charging", "unknown"):
                 self.status = "connected"
-                if self.last_battery == -1:
-                    self.last_battery = 100
                 self.update_tray()
             
             last_recv_time = time.time()
+            last_trim_time = time.time()
             while self.running:
+                if time.time() - last_trim_time > 60:
+                    trim_memory()
+                    last_trim_time = time.time()
+
+                if is_light_mode() != self.last_theme:
+                    self.update_tray()
+
+                if time.time() - self.last_update_check_time >= 86400:
+                    self.last_update_check_time = time.time()
+                    self.check_for_updates(manual=False)
+
                 if time.time() - last_recv_time > 5:
-                    path_check, mode_check, model_check = self.find_device_path()
+                    path_check, mode_check, model_check = find_device_path()
                     if not path_check or mode_check != "wireless":
                         break
                     self.current_model = model_check
@@ -360,12 +381,12 @@ class BatteryTrayApp:
                 try:
                     data = dev.read(64)
                     if data:
-                        if len(data) >= 5 and data[0] == 0x03 and data[1] == 0x55 and data[2] == 0x40 and data[3] == 0x01:
+                        # Parse battery packet: [0x03, device_id, 0x40, 0x01, battery_pct]
+                        # device_id is model-specific (e.g. 0x55=X11, 0x4d=X3, 0x10=R1, 0x85=X6, 0xbe=X11 Pro, 0x07=X11 SE)
+                        if len(data) >= 5 and data[0] == 0x03 and data[2] == 0x40 and data[3] == 0x01:
                             battery = data[4]
                             if 0 <= battery <= 100:
-                                self.last_battery = battery
-                                self.status = "connected"
-                                self.update_tray()
+                                self.update_battery_level(battery, charging=False)
                                 last_recv_time = time.time()
                     time.sleep(0.1)
                 except OSError:
@@ -391,21 +412,29 @@ class BatteryTrayApp:
         set_startup(new_state)
 
     def run(self):
-        menu = pystray.Menu(
-            pystray.MenuItem("Start with Windows", self.toggle_startup, checked=lambda item: is_startup_enabled()),
-            pystray.MenuItem("Exit", self.on_exit)
-        )
         self.icon = pystray.Icon(
             "Mouse Battery Tray",
-            self.get_icon_data(),
+            get_icon_data(self.status, self.last_battery, self._icon_cache),
             "Mouse Battery Tray: Initializing...",
-            menu
+            self.create_menu()
         )
         
         self.poll_thread.start()
+        self.check_for_updates(manual=False)
         self.icon.run()
 
 
 if __name__ == "__main__":
+    if not acquire_single_instance():
+        try:
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                "Mouse Battery Tray is already running in the notification area.",
+                "Mouse Battery Tray",
+                0x40,  # MB_ICONINFORMATION
+            )
+        except Exception:
+            pass
+        sys.exit(0)
     app = BatteryTrayApp()
     app.run()
