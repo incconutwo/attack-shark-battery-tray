@@ -34,6 +34,7 @@ from devices import (
     find_device_path,
     find_wlmouse,
     read_wlmouse_battery,
+    BEKEN_DEVICE_NAMES,
 )
 from icon_drawer import get_icon_data
 
@@ -395,8 +396,12 @@ class BatteryTrayApp:
                     data = dev.read(64)
                     if data:
                         # Parse battery packet: [0x03, device_id, 0x40, sub_type, battery_val, ...]
-                        # device_id is model-specific (e.g. 0x55=X11, 0x4d=X3, 0x10=R1, 0x85=X6, 0xbe=X11 Pro, 0x07=X11 SE)
+                        # device_id is model-specific (e.g. 0x55=X11, 0x10=R1, 0x85=X6, 0x4d=X3, 0xbe=X11 Pro, 0x07=X11 SE)
                         if len(data) >= 5 and data[0] == 0x03 and data[2] == 0x40:
+                            device_id = data[1]
+                            if device_id in BEKEN_DEVICE_NAMES:
+                                self.current_model = BEKEN_DEVICE_NAMES[device_id]
+                            
                             raw_batt = data[4]
                             # Some firmware (e.g. X6) reports battery on a 1-10 scale (10 = 100%)
                             if 0 < raw_batt <= 10:

@@ -7,11 +7,20 @@ from typing import Optional, Tuple, List
 # =============================================================================
 SUPPORTED_VIDS = {0x1d57, 0x25a7, 0x3710, 0x258a, 0x0c45, 0x093a, 0x24ae, 0x1bcf, 0x3554, 0x320f, 0x3537, 0x3770}
 
+BEKEN_DEVICE_NAMES = {
+    0x55: "Attack Shark X11",
+    0x10: "Attack Shark R1",
+    0x85: "Attack Shark X6",
+    0x4d: "Attack Shark X3",
+    0xbe: "Attack Shark X11 Pro",
+    0x07: "Attack Shark X11 SE",
+}
+
 SUPPORTED_DEVICES = {
-    # Attack Shark X11
-    (0x1d57, 0xfa60): ("Attack Shark X11", "wireless"),
+    # Attack Shark Series (Dynamic Device ID via packet)
+    (0x1d57, 0xfa60): ("Attack Shark Mouse", "wireless"),
     (0x1d57, 0xfa55): ("Attack Shark X11", "wired"),
-    0xfa60: ("Attack Shark X11", "wireless"),
+    0xfa60: ("Attack Shark Mouse", "wireless"),
     0xfa55: ("Attack Shark X11", "wired"),
     
     # Attack Shark R1
