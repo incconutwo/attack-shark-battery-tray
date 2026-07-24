@@ -105,5 +105,5 @@ pip install hidapi pystray pillow
 
 ## Acknowledgments & Credits
 
-Special thanks to [@HarukaYamamoto0](https://github.com/HarukaYamamoto0) for reverse engineering and documenting the Beken/Attack Shark mouse HID messaging protocol and device ID mappings in the [attack-shark-x11-driver](https://github.com/HarukaYamamoto0/attack-shark-x11-driver) repository.
+Special thanks to [@HarukaYamamoto0](https://github.com/HarukaYamamoto0) ([attack-shark-x11-driver](https://github.com/HarukaYamamoto0/attack-shark-x11-driver)) for sharing additional Beken OEM model device ID mappings.
 
