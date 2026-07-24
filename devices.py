@@ -176,44 +176,46 @@ def read_wlmouse_battery(path: str) -> Tuple[Optional[int], Optional[bool]]:
 
 
 def find_device_path() -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Scan HID devices for standard supported mice across all vendor interfaces."""
-    fallback = None
+    """Scan HID devices for standard supported mice with prioritized endpoint matching."""
+    p1_match = None  # Interface 2 + usage_page 10 (Best match for Attack Shark X11/X6/X3/R1)
+    p2_match = None  # usage_page 10 or >= 0xff00 or interface 2
+    p3_match = None  # interface 1
+    fallback = None  # any matching VID endpoint
+
     for d in hid.enumerate():
         vid = d['vendor_id']
         pid = d['product_id']
         if vid in SUPPORTED_VIDS:
             if_num = d.get('interface_number', -1)
             usage_page = d.get('usage_page', 0)
-            
-            # Flexible preferred vendor status endpoint check:
-            # Matches interface 2, interface 1, usage page 10 (0x0A), or vendor custom pages (>= 0xff00)
-            is_preferred = (
-                (if_num == 2 and usage_page == 10) or
-                (usage_page == 10) or
-                (usage_page >= 0xff00) or
-                (if_num in (1, 2))
-            )
-            
-            model_name = "Gaming Mouse"
-            mode = "wireless"
-            
+
             if (vid, pid) in SUPPORTED_DEVICES:
                 model_name, mode = SUPPORTED_DEVICES[(vid, pid)]
             elif pid in SUPPORTED_DEVICES:
                 model_name, mode = SUPPORTED_DEVICES[pid]
             else:
                 prod_string = str(d.get('product_string', '')).lower()
-                if "wired" in prod_string:
-                    mode = "wired"
-                else:
-                    mode = "wireless"
+                mode = "wired" if "wired" in prod_string else "wireless"
                 model_name = d.get('product_string', 'Gaming Mouse')
                 if model_name in ['2.4G Wireless Device', '2.4G Receiver']:
                     model_name = "Wireless Mouse"
-            
-            if is_preferred:
-                return d['path'], mode, model_name
+
+            item = (d['path'], mode, model_name)
+
+            if if_num == 2 and usage_page == 10:
+                p1_match = item
+                break  # Perfect match — no need to scan further
+            elif (usage_page == 10 or usage_page >= 0xff00 or if_num == 2) and p2_match is None:
+                p2_match = item
+            elif if_num == 1 and p3_match is None:
+                p3_match = item
             elif fallback is None:
-                fallback = (d['path'], mode, model_name)
-                
+                fallback = item
+
+    if p1_match:
+        return p1_match
+    if p2_match:
+        return p2_match
+    if p3_match:
+        return p3_match
     return fallback if fallback else (None, None, None)

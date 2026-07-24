@@ -225,14 +225,15 @@ class BatteryTrayApp:
                     else:
                         # Subsequent drop (e.g. 80% -> 79%). Append to history.
                         self.battery_history.append((now, battery))
+                    # Prune stale entries (>4h) BEFORE saving to registry
+                    self.battery_history = [(t, b) for t, b in self.battery_history if now - t <= 14400]
                     set_battery_history(self.battery_history, True)
-                elif battery > last_pct + 3:
-                    # Battery increased significantly without charging flag: reset history
+                elif battery > last_pct + 5:
+                    # Battery increased significantly without charging flag: reset history.
+                    # +5 buffer avoids over-sensitive resets from minor reconnect fluctuations.
                     self.battery_history = [(now, battery)]
                     self.is_anchored = False
                     set_battery_history(self.battery_history, False)
-
-            self.battery_history = [(t, b) for t, b in self.battery_history if now - t <= 14400]
 
         self.update_tray()
 
@@ -399,7 +400,8 @@ class BatteryTrayApp:
                         # device_id is model-specific (e.g. 0x55=X11, 0x10=R1, 0x85=X6, 0x4d=X3, 0xbe=X11 Pro, 0x07=X11 SE)
                         if len(data) >= 5 and data[0] == 0x03 and data[2] == 0x40:
                             device_id = data[1]
-                            if device_id in BEKEN_DEVICE_NAMES:
+                            is_beken = device_id in BEKEN_DEVICE_NAMES
+                            if is_beken:
                                 self.current_model = BEKEN_DEVICE_NAMES[device_id]
                             
                             raw_batt = data[4]
@@ -410,14 +412,18 @@ class BatteryTrayApp:
                                 battery = raw_batt
                             
                             # Wireless / Dock Charging detection:
-                            # 1. data[3] in (0x02, 0x03, 0x80) indicates dock charging packet
-                            # 2. Bytes 5, 6, or 7 containing non-zero flags indicate charging state
-                            is_dock_charging = bool(
-                                data[3] in (0x02, 0x03, 0x80) or
-                                (len(data) >= 6 and data[5] != 0) or
-                                (len(data) >= 7 and data[6] != 0) or
-                                (len(data) >= 8 and data[7] != 0)
-                            )
+                            # data[3] subtype: 0x01=discharge, 0x02/0x03/0x80=dock charging.
+                            # Bytes 5-7 non-zero flag check is Beken-specific — only apply for
+                            # confirmed Beken devices to avoid false Chg state on VXE/Hitscan.
+                            if is_beken:
+                                is_dock_charging = bool(
+                                    data[3] in (0x02, 0x03, 0x80) or
+                                    (len(data) >= 6 and data[5] != 0) or
+                                    (len(data) >= 7 and data[6] != 0) or
+                                    (len(data) >= 8 and data[7] != 0)
+                                )
+                            else:
+                                is_dock_charging = data[3] in (0x02, 0x03, 0x80)
                             
                             if 0 <= battery <= 100:
                                 self.update_battery_level(battery, charging=is_dock_charging)
