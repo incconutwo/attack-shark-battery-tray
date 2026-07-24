@@ -394,9 +394,9 @@ class BatteryTrayApp:
                 try:
                     data = dev.read(64)
                     if data:
-                        # Parse battery packet: [0x03, device_id, 0x40, 0x01, battery_val, charging_flag]
+                        # Parse battery packet: [0x03, device_id, 0x40, sub_type, battery_val, ...]
                         # device_id is model-specific (e.g. 0x55=X11, 0x4d=X3, 0x10=R1, 0x85=X6, 0xbe=X11 Pro, 0x07=X11 SE)
-                        if len(data) >= 5 and data[0] == 0x03 and data[2] == 0x40 and data[3] == 0x01:
+                        if len(data) >= 5 and data[0] == 0x03 and data[2] == 0x40:
                             raw_batt = data[4]
                             # Some firmware (e.g. X6) reports battery on a 1-10 scale (10 = 100%)
                             if 0 < raw_batt <= 10:
@@ -404,11 +404,18 @@ class BatteryTrayApp:
                             else:
                                 battery = raw_batt
                             
-                            # Check wireless/dock charging status flag at byte 5
-                            charging = bool(len(data) >= 6 and data[5] in (1, 2, 0x01, 0x02))
+                            # Wireless / Dock Charging detection:
+                            # 1. data[3] in (0x02, 0x03, 0x80) indicates dock charging packet
+                            # 2. Bytes 5, 6, or 7 containing non-zero flags indicate charging state
+                            is_dock_charging = bool(
+                                data[3] in (0x02, 0x03, 0x80) or
+                                (len(data) >= 6 and data[5] != 0) or
+                                (len(data) >= 7 and data[6] != 0) or
+                                (len(data) >= 8 and data[7] != 0)
+                            )
                             
                             if 0 <= battery <= 100:
-                                self.update_battery_level(battery, charging=charging)
+                                self.update_battery_level(battery, charging=is_dock_charging)
                                 last_recv_time = time.time()
                     time.sleep(0.1)
                 except OSError:

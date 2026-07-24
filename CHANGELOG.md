@@ -4,6 +4,14 @@ All notable changes to the Mouse Battery Tray project are documented in this fil
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.2.1] - 2026-07-24
+
+### 🐛 Bug Fixes & Improvements
+
+- **Hours Estimation Persistence & Anchor Fix:** Fixed a list length bug preventing estimation tooltips from rendering, and added Windows Registry persistence (`HKCU\Software\MouseBatteryTray`) so battery history and drop anchors survive PC reboots and app restarts.
+- **Attack Shark X11 & X6 Wireless Dock Charging (`Chg`):** Added active detection for wireless charging dock flags (`data[3] in (0x02, 0x03, 0x80)` and bytes 5-7) so docking the mouse immediately displays **`Chg`**.
+- **X6 1-10 Battery Scaling:** Corrected 1-10 scale readings (where 10 = 100%) for Attack Shark X6 firmware.
+
 ---
 
 ## [v1.2.0] - 2026-07-24
